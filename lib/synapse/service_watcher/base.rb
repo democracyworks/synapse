@@ -18,6 +18,11 @@ module Synapse
         raise ArgumentError, "missing required option #{req}" unless opts[req]
       end
 
+      # require either haproxy or udp_forwarding
+      unless opts.include?('haproxy') ^ opts.include?('udp_forwarding')
+        raise ArgumentError, "must have exactly one of haproxy or udp_forwarding"
+      end
+
       @name = opts['name']
       @discovery = opts['discovery']
 
