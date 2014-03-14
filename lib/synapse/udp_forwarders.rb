@@ -10,12 +10,16 @@ module Synapse
 
     def receive_data(data)
       host, port = @remote.get
-      puts "Got data, forward to #{host}:#{port}"
       relay = UDPSocket.new
       relay.send(data, 0, host, port)
     end
   end
 
+  # wrap up the host and port so we can update the
+  # running server. also need to ensure atomic
+  # access to host and port pair to prevent race
+  # conditions with backends changing at the same time
+  # that requests are being forwarded.
   class Remote
     attr_reader :host, :port
 
@@ -46,11 +50,12 @@ module Synapse
     def initialize(from_port)
       @from_port = from_port
       @thread = nil
-      @remote = nil
+      @remote = nil # shared between this object and the UDPServer instance
     end
 
     def update(backends)
       return if backends.empty?
+      # pick random backend and stick with it until there's an update
       backend = backends.shuffle.first
       host = backend['host']
       port = backend['port']
@@ -66,8 +71,7 @@ module Synapse
 
     def run
       Thread.new {
-        puts "Starting udp_forwarder for localhost:#{@from_port} -> #{@remote.host}:#{@remote.port}"
-        EM.run do
+         EM.run do
           EM.open_datagram_socket('localhost', @from_port, UDPServer, @remote)
         end
       }
@@ -81,9 +85,7 @@ module Synapse
 
     def update_config(watchers)
       watchers.each do |watcher|
-        unless @forwarders[watcher.name]
-          @forwarders[watcher.name] = UDPForwarder.new(watcher.udp_forwarding['port'])
-        end
+        @forwarders[watcher.name] ||= UDPForwarder.new(watcher.udp_forwarding['port'])
         @forwarders[watcher.name].update(watcher.backends)
       end
     end
