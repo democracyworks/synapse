@@ -6,7 +6,7 @@ module Synapse
 
     LEADER_WARN_INTERVAL = 30
 
-    attr_reader :name, :haproxy
+    attr_reader :name, :haproxy, :udp_forwarding
 
     def initialize(opts={}, synapse)
       super()
@@ -14,7 +14,7 @@ module Synapse
       @synapse = synapse
 
       # set required service parameters
-      %w{name discovery haproxy}.each do |req|
+      %w{name discovery}.each do |req|
         raise ArgumentError, "missing required option #{req}" unless opts[req]
       end
 
@@ -25,15 +25,19 @@ module Synapse
       @leader_last_warn = Time.now - LEADER_WARN_INTERVAL
 
       # the haproxy config
-      @haproxy = opts['haproxy']
-      @haproxy['server_options'] ||= ""
-      @haproxy['server_port_override'] ||= nil
-      %w{backend frontend listen}.each do |sec|
-        @haproxy[sec] ||= []
-      end
+      if opts['haproxy']
+        @haproxy = opts['haproxy']
+        @haproxy['server_options'] ||= ""
+        @haproxy['server_port_override'] ||= nil
+        %w{backend frontend listen}.each do |sec|
+          @haproxy[sec] ||= []
+        end
 
-      unless @haproxy.include?('port')
-        log.warn "synapse: service #{name}: haproxy config does not include a port; only backend sections for the service will be created; you must move traffic there manually using configuration in `extra_sections`"
+        unless @haproxy.include?('port')
+          log.warn "synapse: service #{name}: haproxy config does not include a port; only backend sections for the service will be created; you must move traffic there manually using configuration in `extra_sections`"
+        end
+      elsif opts['udp_forwarding']
+        @udp_forwarding = opts['udp_forwarding']
       end
 
       # set initial backends to default servers, if any
