@@ -3,13 +3,42 @@ require 'rubygems'
 require 'eventmachine'
 
 module Synapse
-  module UDPServer
+  class UDPServer < EM::Connection
+    def initialize(remote)
+      @remote = remote
+    end
+
     def receive_data(data)
-      to_ip = Thread.current.thread_variable_get(:to_ip)
-      to_port = Thread.current.thread_variable_get(:to_port)
+      host, port = @remote.get
+      puts "Got data, forward to #{host}:#{port}"
       relay = UDPSocket.new
-      relay.connect(to_ip, to_port)
-      relay.send(data, 0)
+      relay.send(data, 0, host, port)
+    end
+  end
+
+  class Remote
+    attr_reader :host, :port
+
+    def initialize(host, port)
+      @host = host
+      @port = port
+      @mutex = Mutex.new
+    end
+
+    def get
+      hostt = portt = nil
+      @mutex.synchronize do
+        hostt = host
+        portt = port
+      end
+      [hostt,portt]
+    end
+
+    def update(host, port)
+      @mutex.synchronize do
+        @host = host
+        @port = port
+      end
     end
   end
 
@@ -17,29 +46,29 @@ module Synapse
     def initialize(from_port)
       @from_port = from_port
       @thread = nil
+      @remote = nil
     end
 
     def update(backends)
       return if backends.empty?
       backend = backends.shuffle.first
-      to_ip = backend['host']
-      to_port = backend['port']
+      host = backend['host']
+      port = backend['port']
 
       if @thread
-        Thread.current.thread_variable_set(:to_ip, to_ip)
-        Thread.current.thread_variable_set(:to_port, to_port)
+        @remote.update(host, port)
       else
-        @thread = run(to_ip, to_port)
+        @remote = Remote.new(host, port)
+        @thread = run
       end
     end
 
 
-    def run(to_ip, to_port)
+    def run
       Thread.new {
-        Thread.current.thread_variable_set(:to_ip, to_ip)
-        Thread.current.thread_variable_set(:to_port, to_port)
+        puts "Starting udp_forwarder for localhost:#{@from_port} -> #{@remote.host}:#{@remote.port}"
         EM.run do
-          EM.open_datagram_socket('localhost', @from_port, UPDServer)
+          EM.open_datagram_socket('localhost', @from_port, UDPServer, @remote)
         end
       }
     end
@@ -52,10 +81,11 @@ module Synapse
 
     def update_config(watchers)
       watchers.each do |watcher|
-        forwarder = @forwarders[watcher.name] || UDPForwarder.new(watcher.udp_forwarding['port'])
-        forwarder.update(watcher.backends)
+        unless @forwarders[watcher.name]
+          @forwarders[watcher.name] = UDPForwarder.new(watcher.udp_forwarding['port'])
+        end
+        @forwarders[watcher.name].update(watcher.backends)
       end
     end
   end
-end
 end
