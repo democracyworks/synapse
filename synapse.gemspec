@@ -4,10 +4,10 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'synapse/version'
 
 Gem::Specification.new do |gem|
-  gem.name          = "synapse"
+  gem.name          = "democracyworks-synapse"
   gem.version       = Synapse::VERSION
-  gem.authors       = ["Martin Rhoads"]
-  gem.email         = ["martin.rhoads@airbnb.com"]
+  gem.authors       = ["Martin Rhoads", "Chris Shea"]
+  gem.email         = ["martin.rhoads@airbnb.com", "chris@turbovote.org"]
   gem.description   = %q{: Write a gem description}
   gem.summary       = %q{: Write a gem summary}
   gem.homepage      = ""
