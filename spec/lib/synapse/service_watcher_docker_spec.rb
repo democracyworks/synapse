@@ -84,9 +84,9 @@ describe Synapse::DockerWatcher do
     it('has a sane uri') { subject.send(:containers); expect(Docker.url).to eql('http://server1.local:4243') }
 
     context 'old style port mappings' do
+      let(:docker_data) { [{"Ports" => "0.0.0.0:49153->6379/tcp, 0.0.0.0:49154->6390/tcp", "Image" => "mycool/image:tagname"}] }
       context 'works for one container' do
-        let(:docker_data) { [{"Ports" => "0.0.0.0:49153->6379/tcp, 0.0.0.0:49154->6390/tcp", "Image" => "mycool/image:tagname"}] }
-        it do 
+        it do
           expect(Docker::Util).to receive(:parse_json).and_return(docker_data)
           expect(subject.send(:containers)).to eql([{"name"=>"mainserver", "host"=>"server1.local", "port"=>"49153"}])
          end
@@ -106,6 +106,12 @@ describe Synapse::DockerWatcher do
         expect(Docker::Util).to receive(:parse_json).and_return(docker_data)
         expect(subject.send(:containers)).to eql([{"name"=>"mainserver", "host"=>"server1.local", "port"=>"49153"}])
       end
+
+      it 'filters out containers with unmapped ports' do
+        test_docker_data = docker_data + [{"Ports" => [{'PrivatePort' => 6379}], "Image" => "mycool/image:unmapped"}]
+        expect(Docker::Util).to receive(:parse_json).and_return(test_docker_data)
+        expect(subject.send(:containers)).to eql([{"name"=>"mainserver", "host"=>"server1.local", "port"=>"49153"}])
+      end
     end
 
     context 'filters out wrong images' do
@@ -117,4 +123,3 @@ describe Synapse::DockerWatcher do
     end
   end
 end
-
